@@ -3,7 +3,7 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 from typing import Any
-from surprise import SVD
+from surprise import SVD, Reader, Dataset
 from surprise.model_selection import GridSearchCV
 from tqdm import tqdm
 
@@ -170,4 +170,29 @@ def gssv(data_prep_df: pd.DataFrame, alg: type, param_grid: dict, measures, opt_
     print('--------------------------------------------------------------------------')
 
     return gs, best_params
+
+
+def convert_ratings_to_trainset(df: pd.DataFrame, rating: str) -> pd.DataFrame:
+    """
+
+    :param df:
+    :param rating:
+    :return:
+    """
+    # print('Подготовка trainset')
+    # print(80 * '-')
+
+    data_prep = df.rename(columns={'guest_id': 'user_id', 'nomenclature_id': 'item_id'})
+    if data_prep[rating].dtypes != int:
+        data_prep[rating] = data_prep[rating].round().fillna(0).astype('int')
+
+    data_prep = data_prep.rename(columns={'user_id': 'userID', 'item_id': 'itemID', rating: 'rating'})
+
+    min_rating = data_prep['rating'].min()
+    max_rating = data_prep['rating'].max()
+
+    # A reader is still needed but only the rating_scale param is requiered.
+    reader = Reader(rating_scale=(min_rating, max_rating))
+    data_prep_df = Dataset.load_from_df(data_prep[['userID', 'itemID', 'rating']], reader)
+    return data_prep_df
 
