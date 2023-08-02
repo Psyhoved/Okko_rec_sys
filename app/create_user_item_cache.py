@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.libs.recommend_user_item import convert_ratings_to_trainset, train_svd_model
+from libs.recommend_user_item import convert_ratings_to_trainset, train_svd_model
 
 params = {
     "n_epochs": 50,
