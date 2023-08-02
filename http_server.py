@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.openapi.utils import get_openapi
 
 from libs.http_actions.model_cache import get_top_similar_by_user
@@ -49,3 +49,10 @@ async def get_rec(guest_id: int) -> RecommendationResponse:
 
     return response
 
+@app.get('/reload_cache')
+async def reload_cache(response: Response):
+    response.status_code = 200
+    if not reload():
+        response.status_code = 500
+
+    return {}
