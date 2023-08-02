@@ -1,8 +1,9 @@
 from fastapi import FastAPI, Response
 from fastapi.openapi.utils import get_openapi
 
-from libs.http_actions.model_cache import get_top_similar_by_user
-from libs.http_actions.responses import RecommendationResponse, RecommendationItem
+from app.libs.http_actions.model_cache import get_top_similar_by_user
+from app.libs.http_actions.responses import RecommendationResponse, RecommendationItem
+from create_user_item_cache import reload
 
 top_list = [747, 2714, 5616, 3336, 2245]
 app = FastAPI()

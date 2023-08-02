@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from libs.recommend_user_item import convert_ratings_to_trainset, train_svd_model
+from app.libs.recommend_user_item import convert_ratings_to_trainset, train_svd_model
 
 params = {
     "n_epochs": 50,
@@ -15,8 +15,8 @@ n_user = 10
 top_n = 5
 
 
-def load_data():
-    df = pd.read_csv('Data/download/ratings.csv').drop(columns='ts')
+def reload():
+    df = pd.read_csv('Data/ratings.csv').drop(columns='ts')
     user_counts = df['user_uid'].value_counts()
     movie_counts = df['element_uid'].value_counts()
 
@@ -43,3 +43,5 @@ def load_data():
     rec.to_pickle(Path('cache', 'okko_rec.pickle'))
     with open(Path('cache', 'top_list.pickle'), 'wb') as f:
         pickle.dump(top_list, f)
+
+    return True
