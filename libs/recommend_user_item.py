@@ -1,6 +1,4 @@
 from collections import defaultdict
-
-import numpy as np
 import pandas as pd
 from typing import Any
 from surprise import SVD, Reader, Dataset
@@ -23,9 +21,6 @@ def __get_train_svd_model(data_prep_df: pd.DataFrame,
     """
     trainset = data_prep_df.build_full_trainset()
 
-    guest_id_to_uid = {int(trainset.to_raw_uid(uid)): uid for uid in trainset.all_users()}
-    nomenclature_id_to_iid = {int(trainset.to_raw_iid(iid)): iid for iid in trainset.all_items()}
-
     algo = SVD(**model_params)
     algo.fit(trainset)
 
@@ -37,8 +32,8 @@ def __get_train_svd_model(data_prep_df: pd.DataFrame,
         # достаём оценки из трейна и складываем с тестом
         testset_all = trainset.build_testset()
         testset += testset_all
-
-    return testset, algo, guest_id_to_uid, nomenclature_id_to_iid
+    del trainset
+    return testset, algo
 
 
 def train_svd_model(data_prep_df: pd.DataFrame,
@@ -47,8 +42,7 @@ def train_svd_model(data_prep_df: pd.DataFrame,
                     get_all_predicts: bool = False,
                     disable_tqdm: bool = False,
                     all_testset: bool = False,
-                    active_product_list: list[int] = None
-                    ) -> tuple[pd.DataFrame, np.ndarray, np.ndarray, dict[int, int], dict[int, int]]:
+                    ) -> pd.DataFrame:
     """
         Обучает SVD модель и возвращает DataFrame с рекомендациями
 
@@ -67,22 +61,9 @@ def train_svd_model(data_prep_df: pd.DataFrame,
             DataFrame с рекомендациями, матрицы рейтингов и словари для расшифровки uid и iid
 
     """
-    testset, algo, guest_id_to_uid, nomenclature_id_to_iid = __get_train_svd_model(data_prep_df=data_prep_df,
-                                                                                   model_params=best_params,
-                                                                                   all_testset=all_testset)
-
-    # убираем неактивные товары из массива для предсказаний
-    if active_product_list:
-        try:
-            testset_df = pd.DataFrame(testset, columns=['guest_id', 'nomenclature_id', 'rating'])
-            testset_df = testset_df[testset_df['nomenclature_id'].isin(active_product_list)]
-            testset = list(testset_df.itertuples(index=False, name=None))
-        except TypeError as error:
-            print(error)
-    del active_product_list
-    #
-    # print('Генерация рекомендаций')
-    # print(80 * '-')
+    testset, algo = __get_train_svd_model(data_prep_df=data_prep_df,
+                                          model_params=best_params,
+                                          all_testset=all_testset)
 
     # прогноз для тестового датасета
     # Than predict ratings for all pairs (u, i) that are NOT in the training set.
@@ -95,13 +76,13 @@ def train_svd_model(data_prep_df: pd.DataFrame,
 
     del predictions
 
-    pu, qi = algo.pu, algo.qi
     # сохраняем топ-n рекомендаций для каждого пользователя
-    return rec_to_df(top_n_df), pu, qi, guest_id_to_uid, nomenclature_id_to_iid
+    return rec_to_df(top_n_df)
 
 
 # Функция для вывода топ-N рекомендаций для каждого пользователя
-def get_top_n(predictions: list, all_pred: bool = False,
+def get_top_n(predictions: list,
+              all_pred: bool = False,
               n_pred: int = 10,
               disable_tqdm: bool = False) -> dict:
     """Return the top-N recommendation for each user from a set of predictions.
@@ -144,7 +125,6 @@ def rec_to_df(top_n: dict) -> pd.DataFrame:
     return pd.DataFrame(result, columns=['item_id', 'rating', 'user_id'])
 
 
-# model_rec
 def gssv(data_prep_df: pd.DataFrame, alg: type, param_grid: dict, measures, opt_by="rmse"):
     """
 
@@ -155,44 +135,31 @@ def gssv(data_prep_df: pd.DataFrame, alg: type, param_grid: dict, measures, opt_
     :param opt_by:
     :return:
     """
-    print('Проводится GridSearch')
-
     gs = GridSearchCV(alg, param_grid, measures=measures, cv=3)
     gs.fit(data_prep_df)
 
-    print('--------------------------------------------------------------------------')
     # best RMSE score
     print(f'best_score {opt_by}: {gs.best_score[opt_by]}')
     # combination of parameters that gave the best RMSE score
     best_params = f'best_params {opt_by}: {gs.best_params[opt_by]}'
     print(best_params)
 
-    print('--------------------------------------------------------------------------')
-
     return gs, best_params
 
 
-def convert_ratings_to_trainset(df: pd.DataFrame, rating: str) -> pd.DataFrame:
+def convert_ratings_to_trainset(df: pd.DataFrame) -> pd.DataFrame:
     """
 
     :param df:
     :param rating:
     :return:
     """
-    # print('Подготовка trainset')
-    # print(80 * '-')
 
-    data_prep = df.rename(columns={'guest_id': 'user_id', 'nomenclature_id': 'item_id'})
-    if data_prep[rating].dtypes != int:
-        data_prep[rating] = data_prep[rating].round().fillna(0).astype('int')
-
-    data_prep = data_prep.rename(columns={'user_id': 'userID', 'item_id': 'itemID', rating: 'rating'})
-
-    min_rating = data_prep['rating'].min()
-    max_rating = data_prep['rating'].max()
+    df.columns = ['userID', 'itemID', 'rating']
+    min_rating = df['rating'].min()
+    max_rating = df['rating'].max()
 
     # A reader is still needed but only the rating_scale param is requiered.
     reader = Reader(rating_scale=(min_rating, max_rating))
-    data_prep_df = Dataset.load_from_df(data_prep[['userID', 'itemID', 'rating']], reader)
+    data_prep_df = Dataset.load_from_df(df[['userID', 'itemID', 'rating']], reader)
     return data_prep_df
-
